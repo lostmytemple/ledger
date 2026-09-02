@@ -51,8 +51,8 @@ header .t{font-size:12px;padding:0 10px;width:auto}
 .dlg.cat h3{font-size:16px;margin-bottom:12px}
 .dlg.cat p.mute{font-size:12px;margin:4px 0 6px}
 .catnew{display:flex;gap:6px}
-.catnew input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:15px}
-.catnew button{flex:0 0 auto;padding:0 16px;border-radius:8px;font-size:14px;background:var(--ink);color:#fff}
+.catnew input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:15px;color:var(--ink);background:#fff;-webkit-text-fill-color:var(--ink)}
+.catnew button{flex:0 0 auto;padding:0 16px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:600;background:var(--soft);color:var(--ink);-webkit-text-fill-color:var(--ink)}
 #catList{margin:0 0 8px}
 #catList button{background:#fff;border:1px solid var(--line);color:var(--ink)}
 #catList button .x{margin-left:6px;color:var(--out);font-weight:600}
@@ -68,6 +68,7 @@ header .t{font-size:12px;padding:0 10px;width:auto}
 .amt input{flex:1;font-size:30px;font-weight:700;text-align:right;min-width:0}
 .amt input::placeholder{color:#ccc;font-weight:400}
 .amt em{font-style:normal;font-size:16px;color:var(--ink2)}
+.amt #dbl0{flex:0 0 auto;padding:5px 10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-weight:600;color:var(--ink);background:var(--soft)}
 .f{display:flex;gap:8px;margin-top:10px}
 .f input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .datebtn{flex:0 0 auto;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:15px;white-space:nowrap}
@@ -176,7 +177,7 @@ nav button.on{color:var(--ink);font-weight:700;border-top-color:var(--ink)}
       <div class="seg" id="fixSeg"><button class="on" data-x="var">변동</button><button data-x="fix">고정</button></div>
       <div class="seg" id="paySeg"><button class="on" data-p="cash">현금</button><button data-p="card">카드</button></div>
     </div>
-    <div class="amt"><input id="amount" type="text" inputmode="numeric" placeholder="0"><em>원</em></div>
+    <div class="amt"><input id="amount" type="text" inputmode="numeric" placeholder="0"><button type="button" id="dbl0">00</button><em>원</em></div>
     <div class="chips compact" id="cats"></div>
     <div class="f"><input id="memo" type="text" placeholder="메모 (선택)" maxlength="40"><input id="date" type="hidden"><button type="button" id="dateBtn" class="datebtn"></button></div>
     <button class="btn" id="save">저장</button>
@@ -380,6 +381,7 @@ $('#filter').addEventListener('click',e=>{const b=e.target.closest('button');if(
 
 // ---------- 입력 ----------
 $('#amount').addEventListener('input',e=>{const v=e.target.value.replace(/[^\d]/g,'');e.target.value=v?Number(v).toLocaleString('ko-KR'):'';});
+$('#dbl0').addEventListener('click',()=>{const a=$('#amount');const v=a.value.replace(/[^\d]/g,'');if(!v)return;const nv=v+'00';if(nv.length>12)return;a.value=Number(nv).toLocaleString('ko-KR');});
 $('#amount').addEventListener('keydown',e=>{if(e.key==='Enter')$('#save').click();});
 setDate(iso(new Date()));
 $('#typeSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;type=b.dataset.t;cat=CATS[type][0];syncForm();});
@@ -446,7 +448,8 @@ $('#save').addEventListener('click',()=>{
     if(wantFix){const nr={id:e.id+1,name:memo||cat,amount,cat,pay,day,startYm:ym,skip:[]};db.rules.push(nr);e.ruleId=nr.id;msg='저장했습니다 · 다음 달부터 자동 추가';}
     db.entries.push(e);
   }
-  save();cur=ym;selDate=date;resetForm();renderAll();showView('list');toast(msg);
+  const wasEdit=!!editId;
+  save();cur=ym;selDate=date;resetForm();renderAll();if(wasEdit)showView('list');toast(msg);
 });
 $('#cancelEdit').addEventListener('click',()=>{resetForm();showView('list');});
 async function deleteEntry(id){
