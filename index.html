@@ -346,9 +346,12 @@ function renderList(){
   if(catFilter)m=m.filter(e=>e.cat===catFilter);
   m.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   const billRow=(filter==='all'&&!catFilter&&bill)?`<div class="r bill"><span class="l">카드값<small>${label(shiftYm(cur,-1))} 카드 사용분</small></span><span class="v n">-${won(bill)}</span></div>`:'';
-  if(!m.length){$('#list').innerHTML=billRow+'<div class="empty">내역이 없습니다</div>';return;}
+  let sumRow='';
+  if(catFilter&&m.length){const t=m.reduce((a,e)=>a+e.amount,0),isIn=m[0].type==='in';
+    sumRow=`<div class="r bill"><span class="l">${esc(catFilter)} 합계<small>${label(cur)} · ${m.length}건</small></span><span class="v n${isIn?' in':''}">${isIn?'+':'-'}${won(t)}</span></div>`;}
+  if(!m.length){$('#list').innerHTML=billRow+sumRow+'<div class="empty">내역이 없습니다</div>';return;}
   const g={};m.forEach(e=>(g[e.date]=g[e.date]||[]).push(e));
-  $('#list').innerHTML=billRow+Object.keys(g).map(d=>{
+  $('#list').innerHTML=billRow+sumRow+Object.keys(g).map(d=>{
     const dt=new Date(d+'T00:00:00');const o=g[d].filter(e=>e.type==='out').reduce((a,e)=>a+e.amount,0);
     return `<div class="day"><span>${dt.getDate()}일 ${DAY[dt.getDay()]}</span><span class="n">${o?'-'+won(o):''}</span></div>`+g[d].map(item).join('');
   }).join('');
