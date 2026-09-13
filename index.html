@@ -72,6 +72,15 @@ header .t{font-size:12px;padding:0 10px;width:auto}
 .f input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .datebtn{flex:0 0 auto;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:15px;white-space:nowrap}
 .datebtn.su,.datebtn.hol{color:var(--out)}
+.instrow{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.insttoggle{padding:7px 12px;border-radius:8px;border:1px dashed #bbb;color:var(--ink2);font-size:13px;background:#fff}
+.insttoggle.on{background:var(--ink);color:#fff;border-style:solid;border-color:var(--ink)}
+.stepper{display:flex;align-items:center;gap:8px}
+.stepper button{width:32px;height:32px;border-radius:8px;background:var(--soft);font-size:18px;line-height:1;padding:0;color:var(--ink)}
+.stepper span{min-width:24px;text-align:center;font-weight:700;font-size:15px}
+.stepper .mute{font-size:12px;color:var(--ink2);font-weight:400}
+.instrow .insthint{flex-basis:100%;margin:2px 0 0;font-size:12px}
+#fixSeg.off{opacity:.35;pointer-events:none}
 .dlg.pick{padding:14px 10px 10px}
 .pick .ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .pick .ph b{font-size:15px}
@@ -174,14 +183,21 @@ nav button.on{color:var(--ink);font-weight:700;border-top-color:var(--ink)}
     <div class="segrow">
       <div class="seg" id="typeSeg"><button class="on" data-t="out">지출</button><button data-t="in">수입</button></div>
       <div class="seg" id="fixSeg"><button class="on" data-x="var">변동</button><button data-x="fix">고정</button></div>
-      <div class="seg" id="paySeg"><button class="on" data-p="cash">현금</button><button data-p="card">카드</button></div>
+      <div class="seg" id="paySeg"><button data-p="card">카드</button><button class="on" data-p="cash">현금</button></div>
+    </div>
+    <div class="instrow" id="instRow" hidden>
+      <button type="button" class="insttoggle" id="instToggle">할부 결제</button>
+      <div class="stepper" id="instStepper" hidden>
+        <button type="button" id="mMinus">−</button><span id="mVal">3</span><button type="button" id="mPlus">+</button><span class="mute">개월</span>
+      </div>
+      <p class="mute insthint" id="instHint" hidden></p>
     </div>
     <div class="amt"><input id="amount" type="text" inputmode="numeric" placeholder="0"><em>원</em></div>
     <div class="chips compact" id="cats"></div>
     <div class="f"><input id="memo" type="text" placeholder="메모 (선택)" maxlength="40"><input id="date" type="hidden"><button type="button" id="dateBtn" class="datebtn"></button></div>
     <button class="btn" id="save">저장</button>
     <button class="btn danger" id="delete" hidden>이 내역 삭제</button>
-    <p class="note">고정: 다음 달부터 같은 날짜에 자동으로 다시 추가됩니다.<br>카드: 이번 달 지출에 넣지 않고, 다음 달 "카드값"으로 합산됩니다.</p>
+    <p class="note">고정: 다음 달부터 같은 날짜에 자동으로 다시 추가됩니다.<br>카드: 이번 달 지출에 넣지 않고, 다음 달 "카드값"으로 합산됩니다.<br>할부: 총 결제 금액을 입력하면 개월 수만큼 나눠 매달 자동 등록됩니다.</p>
   </div>
 </section>
 
@@ -261,7 +277,7 @@ const ask=msg=>new Promise(res=>{const bg=$('#dlgBg');$('#dlgMsg').textContent=m
 const isCard=e=>e.type==='out'&&e.pay==='card';
 
 let cur=ymOf(new Date()),selDate=iso(new Date());
-let type='out',fix='var',pay='cash',cat=CATS.out[0],editId=null,filter='all',catFilter='';
+let type='out',fix='var',pay='card',cat=CATS.out[0],editId=null,filter='all',catFilter='',instOn=false,instMonths=3;
 
 // ---------- 고정 항목 자동 반영 ----------
 function materialize(ym){
@@ -288,7 +304,7 @@ function sums(ym){
 }
 
 // ---------- 렌더 ----------
-const item=e=>`<div class="r tap" data-id="${e.id}" role="button" tabindex="0"><span class="l">${esc(e.memo)||e.cat}<small>${e.cat}${e.type==='out'?(e.ruleId?' · 고정':' · 변동')+(e.pay==='card'?' · 카드':' · 현금'):''}</small></span><span class="v n ${e.type==='in'?'in':''}">${e.type==='in'?'+':'-'}${won(e.amount)}</span><button class="x" data-del="${e.id}" aria-label="삭제">삭제</button></div>`;
+const item=e=>{const tag=e.type==='out'?(e.instId?` · 할부 ${e.instN}/${e.instTotal}`:(e.ruleId?' · 고정':' · 변동'))+(e.pay==='card'?' · 카드':' · 현금'):'';const sign=e.type==='in'?'+':'-';const amtStr=sign+won(e.amount)+(e.instId&&e.instAmt!=null?` (${sign}${won(e.instAmt)})`:'');return `<div class="r tap" data-id="${e.id}" role="button" tabindex="0"><span class="l">${esc(e.memo)||e.cat}<small>${e.cat}${tag}</small></span><span class="v n ${e.type==='in'?'in':''}">${amtStr}</span><button class="x" data-del="${e.id}" aria-label="삭제">삭제</button></div>`;};
 function renderHome(){
   $('#ym').textContent=label(cur);
   const s=sums(cur);
@@ -366,8 +382,19 @@ function syncForm(){
   $$('#typeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.t===type));
   $$('#fixSeg button').forEach(x=>x.classList.toggle('on',x.dataset.x===fix));
   $$('#paySeg button').forEach(x=>x.classList.toggle('on',x.dataset.p===pay));
-  $('#fixSeg').hidden=$('#paySeg').hidden=type!=='out';renderCats();
+  $('#fixSeg').hidden=$('#paySeg').hidden=type!=='out';renderCats();syncInst();
 }
+function syncInst(){
+  $('#instRow').hidden=!(type==='out'&&pay==='card'&&editId==null);
+  $('#instToggle').classList.toggle('on',instOn);
+  $('#instToggle').textContent=instOn?'할부 '+instMonths+'개월':'할부 결제';
+  $('#instStepper').hidden=!instOn;$('#mVal').textContent=instMonths;
+  $('#instHint').hidden=!instOn;$('#instHint').textContent=instOn?'총 금액을 '+instMonths+'개월로 나눠 매달 자동 등록됩니다.':'';
+  $('#fixSeg').classList.toggle('off',instOn);
+}
+$('#instToggle').addEventListener('click',()=>{instOn=!instOn;if(instOn)fix='var';syncForm();});
+$('#mMinus').addEventListener('click',()=>{if(instMonths>2)instMonths--;syncInst();});
+$('#mPlus').addEventListener('click',()=>{if(instMonths<36)instMonths++;syncInst();});
 
 // ---------- 월 이동 / 탭 ----------
 function fixSel(){if(!selDate.startsWith(cur))selDate=cur+'-01';}
@@ -428,7 +455,7 @@ $('#pPrev').addEventListener('click',()=>{pickYm=shiftYm(pickYm,-1);renderPick()
 $('#pNext').addEventListener('click',()=>{pickYm=shiftYm(pickYm,1);renderPick();});
 $('#pToday').addEventListener('click',()=>{setDate(iso(new Date()));pickBg.classList.remove('on');});
 $('#pGrid').addEventListener('click',e=>{const c=e.target.closest('.cell[data-d]');if(c){setDate(c.dataset.d);pickBg.classList.remove('on');}});
-function resetForm(){editId=null;type='out';fix='var';pay='cash';cat=CATS.out[0];$('#amount').value='';$('#memo').value='';setDate(iso(new Date()));$('#editBar').hidden=true;$('#delete').hidden=true;$('#save').textContent='저장';syncForm();}
+function resetForm(){editId=null;type='out';fix='var';pay='card';cat=CATS.out[0];instOn=false;instMonths=3;$('#amount').value='';$('#memo').value='';setDate(iso(new Date()));$('#editBar').hidden=true;$('#delete').hidden=true;$('#save').textContent='저장';syncForm();}
 const dropRuleFrom=(ruleId,ym,keepId)=>{db.rules=db.rules.filter(r=>r.id!==ruleId);db.entries=db.entries.filter(e=>!(e.ruleId===ruleId&&e.date.slice(0,7)>=ym&&e.id!==keepId));};
 
 $('#save').addEventListener('click',()=>{
@@ -444,6 +471,14 @@ $('#save').addEventListener('click',()=>{
     if(wantFix&&r){Object.assign(r,{name:memo||cat,amount,cat,pay,day});msg='수정했습니다 · 다음 달부터 반영';}
     else if(wantFix&&!r){const nr={id:Date.now(),name:memo||cat,amount,cat,pay,day,startYm:ym,skip:[]};db.rules.push(nr);e.ruleId=nr.id;msg='고정으로 바꿨습니다';}
     else if(!wantFix&&e.ruleId){dropRuleFrom(e.ruleId,ym,e.id);delete e.ruleId;msg='고정을 해제했습니다';}
+  }else if(type==='out'&&pay==='card'&&instOn&&instMonths>=2){
+    const base=Date.now(),n=instMonths,per=Math.floor(amount/n),rem=amount-per*n;
+    for(let i=0;i<n;i++){
+      const tym=shiftYm(ym,i),[ty,tm]=tym.split('-').map(Number),dim=new Date(ty,tm,0).getDate();
+      const d=tym+'-'+pad(Math.min(day,dim));
+      db.entries.push({id:base+i,type:'out',cat,amount:i===0?per+rem:per,memo,date:d,pay:'card',instId:base,instN:i+1,instTotal:n,instAmt:amount});
+    }
+    msg=n+'개월 할부로 나눠 저장했습니다';
   }else{
     const e={id:Date.now(),type,cat,amount,memo,date};if(type==='out')e.pay=pay;
     if(wantFix){const nr={id:e.id+1,name:memo||cat,amount,cat,pay,day,startYm:ym,skip:[]};db.rules.push(nr);e.ruleId=nr.id;msg='저장했습니다 · 다음 달부터 자동 추가';}
@@ -459,6 +494,15 @@ async function deleteEntry(id){
   const r=e.ruleId?db.rules.find(x=>x.id===e.ruleId):null;
   if(r&&ym===r.startYm){if(!await ask('고정 항목입니다.\n'+name+'\n다음 달 이후 것까지 모두 삭제할까요?'))return false;dropRuleFrom(r.id,ym);msg='고정 항목을 삭제했습니다';}
   else if(r){if(!await ask(name+'\n이 달 것만 삭제할까요?'))return false;r.skip=r.skip||[];r.skip.push(ym);msg='이 달 것만 삭제했습니다';}
+  else if(e.instId){
+    const remain=db.entries.filter(x=>x.instId===e.instId&&x.date>=e.date).length;
+    if(remain>1){
+      if(!await ask(name+'\n할부 '+e.instN+'/'+e.instTotal+'\n이번 회차부터 남은 '+remain+'건을 모두 삭제할까요?'))return false;
+      db.entries=db.entries.filter(x=>!(x.instId===e.instId&&x.date>=e.date));save();
+      if(editId===id)resetForm();renderAll();toast('할부 '+remain+'건을 삭제했습니다');return true;
+    }
+    if(!await ask(name+'\n마지막 할부 회차입니다.\n삭제할까요?'))return false;
+  }
   else if(!await ask(name+'\n삭제할까요?'))return false;
   db.entries=db.entries.filter(x=>x.id!==id);save();
   if(editId===id)resetForm();renderAll();toast(msg);return true;
@@ -466,7 +510,7 @@ async function deleteEntry(id){
 $('#delete').addEventListener('click',async()=>{if(await deleteEntry(editId))showView('list');});
 function startEdit(id){
   const e=db.entries.find(x=>x.id===id);if(!e)return;
-  editId=id;type=e.type;cat=e.cat;fix=e.ruleId?'fix':'var';pay=e.pay||'cash';syncForm();
+  editId=id;type=e.type;cat=e.cat;fix=e.ruleId?'fix':'var';pay=e.pay||'card';instOn=false;syncForm();
   $('#amount').value=e.amount.toLocaleString('ko-KR');$('#memo').value=e.memo||'';setDate(e.date);
   $('#editBar').hidden=false;$('#delete').hidden=false;$('#save').textContent='수정 저장';showView('add');
 }
