@@ -163,6 +163,8 @@ nav button.on{color:var(--ink);font-weight:700;border-top-color:var(--ink)}
     <div class="r"><span class="l">카드 사용 합계</span><span class="v n" id="hCard"></span></div>
     <div class="r sub"><span class="l">고정</span><span class="v n" id="hCardFix"></span></div>
     <div class="r sub"><span class="l">변동</span><span class="v n" id="hCardVar"></span></div>
+    <div class="r sub"><span class="l">할부<small>이번 달 결제분</small></span><span class="v n" id="hCardInst"></span></div>
+    <div class="r sub"><span class="l">할부 잔액<small>다음 달부터 남은 금액</small></span><span class="v n" id="hInstLeft"></span></div>
   </div>
 </section>
 
@@ -291,15 +293,16 @@ function materialize(ym){
   if(added)save();
 }
 function month(ym){materialize(ym);return db.entries.filter(e=>e.date.startsWith(ym));}
+function instRemaining(ym){return db.entries.filter(e=>e.instId&&e.date.slice(0,7)>ym).reduce((a,e)=>a+e.amount,0);}
 function cardTotal(ym){return month(ym).filter(isCard).reduce((a,e)=>a+e.amount,0);}
 function sums(ym){
-  const s={in:0,fix:0,var:0,cardFix:0,cardVar:0};
+  const s={in:0,fix:0,var:0,cardFix:0,cardVar:0,cardInst:0};
   month(ym).forEach(e=>{
     if(e.type==='in'){s.in+=e.amount;return;}
-    if(e.pay==='card')s[e.ruleId?'cardFix':'cardVar']+=e.amount;
+    if(e.pay==='card'){s[e.instId?'cardInst':(e.ruleId?'cardFix':'cardVar')]+=e.amount;}
     else s[e.ruleId?'fix':'var']+=e.amount;
   });
-  s.card=s.cardFix+s.cardVar;s.bill=cardTotal(shiftYm(ym,-1));
+  s.card=s.cardFix+s.cardVar+s.cardInst;s.bill=cardTotal(shiftYm(ym,-1));
   s.out=s.fix+s.var+s.bill;s.bal=s.in-s.out;return s;
 }
 
@@ -312,6 +315,7 @@ function renderHome(){
   $('#hIn').textContent=won(s.in);$('#hOut').textContent=won(s.out);
   $('#hFix').textContent=won(s.fix);$('#hVar').textContent=won(s.var);$('#hBill').textContent=won(s.bill);
   $('#hCard').textContent=won(s.card);$('#hCardFix').textContent=won(s.cardFix);$('#hCardVar').textContent=won(s.cardVar);
+  $('#hCardInst').textContent=won(s.cardInst);$('#hInstLeft').textContent=won(instRemaining(cur));
 }
 // 공휴일 (음력 기반 명절은 2024~2035 고정표)
 const LUNAR={2024:['0210','0917','0515'],2025:['0129','1006','0505'],2026:['0217','0925','0524'],2027:['0206','0915','0513'],2028:['0126','1003','0502'],2029:['0213','0922','0520'],2030:['0203','0912','0509'],2031:['0123','1001','0528'],2032:['0211','0919','0516'],2033:['0131','0908','0506'],2034:['0219','0928','0525'],2035:['0208','0916','0515']};
@@ -363,8 +367,12 @@ function renderList(){
   m.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   const billRow=(filter==='all'&&!catFilter&&bill)?`<div class="r bill"><span class="l">카드값<small>${label(shiftYm(cur,-1))} 카드 사용분</small></span><span class="v n">-${won(bill)}</span></div>`:'';
   let sumRow='';
-  if(catFilter&&m.length){const t=m.reduce((a,e)=>a+e.amount,0),isIn=m[0].type==='in';
-    sumRow=`<div class="r bill"><span class="l">${esc(catFilter)} 합계<small>${label(cur)} · ${m.length}건</small></span><span class="v n${isIn?' in':''}">${isIn?'+':'-'}${won(t)}</span></div>`;}
+  if((filter!=='all'||catFilter)&&m.length){
+    const t=m.reduce((a,e)=>a+e.amount,0),isIn=m[0].type==='in';
+    const FLABEL={in:'수입',fix:'고정 지출',var:'변동 지출',card:'카드 사용'};
+    const lbl=catFilter||FLABEL[filter]||'';
+    sumRow=`<div class="r bill"><span class="l">${esc(lbl)} 합계<small>${label(cur)} · ${m.length}건</small></span><span class="v n${isIn?' in':''}">${isIn?'+':'-'}${won(t)}</span></div>`;
+  }
   if(!m.length){$('#list').innerHTML=billRow+sumRow+'<div class="empty">내역이 없습니다</div>';return;}
   const g={};m.forEach(e=>(g[e.date]=g[e.date]||[]).push(e));
   $('#list').innerHTML=billRow+sumRow+Object.keys(g).map(d=>{
