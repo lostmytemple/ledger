@@ -206,7 +206,7 @@ nav button.on{color:var(--ink);font-weight:700;border-top-color:var(--ink)}
 <!-- 내역 -->
 <section class="view" id="v-list">
   <div class="chips" id="filter">
-    <button class="on" data-f="all">전체</button><button data-f="in">수입</button><button data-f="fix">고정</button><button data-f="var">변동</button><button data-f="card">카드</button>
+    <button class="on" data-f="all">전체</button><button data-f="in">수입</button><button data-f="fix">고정</button><button data-f="fixcash">고정현금</button><button data-f="fixcard">고정카드</button><button data-f="var">변동</button><button data-f="card">카드</button>
   </div>
   <div class="chips cats2" id="catFilter"></div>
   <div class="rows" id="list"></div>
@@ -358,6 +358,8 @@ function renderList(){
   let m=month(cur);const bill=cardTotal(shiftYm(cur,-1));
   if(filter==='in')m=m.filter(e=>e.type==='in');
   if(filter==='fix')m=m.filter(e=>e.type==='out'&&e.ruleId);
+  if(filter==='fixcash')m=m.filter(e=>e.type==='out'&&e.ruleId&&e.pay==='cash');
+  if(filter==='fixcard')m=m.filter(e=>e.type==='out'&&e.ruleId&&e.pay==='card');
   if(filter==='var')m=m.filter(e=>e.type==='out'&&!e.ruleId);
   if(filter==='card')m=m.filter(isCard);
   const present=[...new Set(m.map(e=>e.cat))];
@@ -369,7 +371,7 @@ function renderList(){
   let sumRow='';
   if((filter!=='all'||catFilter)&&m.length){
     const t=m.reduce((a,e)=>a+e.amount,0),isIn=m[0].type==='in';
-    const FLABEL={in:'수입',fix:'고정 지출',var:'변동 지출',card:'카드 사용'};
+    const FLABEL={in:'수입',fix:'고정 지출',fixcash:'고정(현금) 지출',fixcard:'고정(카드) 지출',var:'변동 지출',card:'카드 사용'};
     const lbl=catFilter||FLABEL[filter]||'';
     sumRow=`<div class="r bill"><span class="l">${esc(lbl)} 합계<small>${label(cur)} · ${m.length}건</small></span><span class="v n${isIn?' in':''}">${isIn?'+':'-'}${won(t)}</span></div>`;
   }
@@ -482,8 +484,7 @@ $('#save').addEventListener('click',()=>{
   }else if(type==='out'&&pay==='card'&&instOn&&instMonths>=2){
     const base=Date.now(),n=instMonths,per=Math.floor(amount/n),rem=amount-per*n;
     for(let i=0;i<n;i++){
-      const tym=shiftYm(ym,i),[ty,tm]=tym.split('-').map(Number),dim=new Date(ty,tm,0).getDate();
-      const d=tym+'-'+pad(Math.min(day,dim));
+      const d=i===0?date:shiftYm(ym,i)+'-01';
       db.entries.push({id:base+i,type:'out',cat,amount:i===0?per+rem:per,memo,date:d,pay:'card',instId:base,instN:i+1,instTotal:n,instAmt:amount});
     }
     msg=n+'개월 할부로 나눠 저장했습니다';
